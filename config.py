@@ -6,6 +6,9 @@ load_dotenv()
 AGENT_URL = os.getenv('AGENT_URL')
 
 DEFAULT_RESPONSE_EXAMPLE = {
+    "test_id": 1234,
+    "start_time": "2026-08-05T04:07:55",
+    "end_time": "2026-08-05T21:22:51",
     "status": "issues_found",
     "summary": "Обнаружено 3 типа ошибок",
     "severity": "high",
@@ -19,10 +22,9 @@ DEFAULT_RESPONSE_EXAMPLE = {
             "level": "ERROR",
             "count": 87,
             "message": "Timeout during MQTT protocol handshake",
-            "first_seen": "2026-08-07T10:14:12",
-            "last_seen": "2026-08-07T10:58:43",
             "possible_cause": "Большое количество одновременно устанавливаемых MQTT соединений",
-            "recommendation": "Проверить acceptor timeout и скорость установления соединений"
+            "recommendation": "Проверить acceptor timeout и скорость установления соединений",
+            "KQL-query": 'service_name:"swarm_iot_broker" AND level:"ERROR" AND log:"MQTT handshake timeout"'
         },
         {
             "service": "iot-core",
@@ -30,7 +32,8 @@ DEFAULT_RESPONSE_EXAMPLE = {
             "count": 55,
             "message": "RabbitMQ connection timeout",
             "possible_cause": "Рост времени ответа RabbitMQ",
-            "recommendation": "Проверить RabbitMQ connection/channel metrics"
+            "recommendation": "Проверить RabbitMQ connection/channel metrics",
+            "KQL-query": 'service_name:"swarm_iot_core" AND level:"ERROR" AND log:"RabbitMQ" AND log:"timeout"'
         }
     ]
 }

@@ -35,6 +35,8 @@ async def log_analysis(request: Request):
         body = await request.json()
     except Exception:
         body = {}
+
+    server_ip = body.get("server_ip")
     test_id = body.get("test_id")
     start_time = body.get("start_time")
     end_time = body.get("end_time")
@@ -44,6 +46,7 @@ async def log_analysis(request: Request):
     response_example = body.get("response_example", DEFAULT_RESPONSE_EXAMPLE)
 
     prompt = _build_prompt(
+        server_ip=server_ip,
         test_id=test_id,
         start_time=start_time,
         end_time=end_time,
@@ -52,21 +55,33 @@ async def log_analysis(request: Request):
         response_example=response_example,
     )
 
-    result = _send_promt_to_model(prompt, client_api_key)
+    # result = _send_promt_to_model(prompt, client_api_key)
+
+    attempts_count = 0
+
+    while attempts_count < 5:
+        result = _send_promt_to_model(prompt, client_api_key)
+        if result.get("error") is not None:
+            attempts_count +=1
+        else:
+            break
+        
 
     return JSONResponse(result)
 
 
-def _build_prompt(test_id, start_time, end_time, services, analysis_type, response_example=None) -> str:
+def _build_prompt(server_ip, test_id, start_time, end_time, services, analysis_type, response_example=None) -> str:
     analysis_desc = ANALYSIS_TYPES.get(analysis_type, analysis_type)
 
     services_str = ", ".join(services) if services else "все сервисы"
 
     lines = [
+        'КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ВЫВОДИТЬ ЛЮБОЙ ТЕКСТ, КРОМЕ JSON.',
         "Ты — инженер по нагрузочному тестированию и анализу логов.",
         "",
         f"Необходимо провести анализ логов по следующему запросу:",
         "",
+        f"- IP сервера: {server_ip}. При формировании URL используй ТОЛЬКО этот URL, никакой другой не подходит.",
         f"- ID теста: {test_id if test_id is not None else 'не указан'}",
         f"- Период анализа: {start_time or '—'} — {end_time or '—'}",
         f"- Сервисы: {services_str}",
@@ -75,8 +90,9 @@ def _build_prompt(test_id, start_time, end_time, services, analysis_type, respon
         "Задача:",
         f"{analysis_desc}",
         'Используй для анализа логов только инструменты elasticsearch__search, elasticsearch__list_indices и elasticsearch__esql.',
-        'ЗАПРЕЩЕНО использовать elasticsearch__get_mappings — он не работает (возвращает ошибку и ставит инструмент в паузу).'
-        'Чтобы узнать поля документа — возьми один документ через elasticsearch__search (size: 1) и посмотри его поля. Не вызывай get_mappings.'
+        'ЗАПРЕЩЕНО использовать elasticsearch__get_mappings — он не работает (возвращает ошибку и ставит инструмент в паузу).',
+        'Чтобы узнать поля документа — возьми один документ через elasticsearch__search (size: 1) и посмотри его поля. Не вызывай get_mappings.',
+        'Если запрос вызвал паузу сервера, то снова его использовать ЗАПРЕЩЕНО. Сервер уходит на паузу если быстро использовать несколько раз один и тот же инструмент, который возвращает ошибку.'
     ]
 
     if analysis_type == "errors":
@@ -88,6 +104,9 @@ def _build_prompt(test_id, start_time, end_time, services, analysis_type, respon
         lines.append("- Опиши объём сообщений/запросов по сервисам и пиковые нагрузки.")
     elif analysis_type == "anomalies":
         lines.append("- Опиши замеченные аномалии с временными отметками.")
+    elif analysis_type == "warnings":
+        lines.append("- Перечисли найденнные предупреждения с временем и сервисом.")
+        lines.append("- Укажи вероятную причину и критичность каждого.")
     else:
         lines.append("- Дай развёрнутый ответ.")
 
@@ -104,6 +123,11 @@ def _build_prompt(test_id, start_time, end_time, services, analysis_type, respon
             "",
             "Ответ оформи структурно и по делу, опираясь на логи за указанный период. Верни ответ ИСКЛЮЧИТЕЛЬНО в формате JSON. Не пиши НИЧЕГО после вывода финального JSON. Можешь вообще молча думать, нужно ТОЛЬКО JSON. Оберни итоговый JSON обязательно в конструкцию ```json {...} ```",
         ]
+
+    lines.append('ОБЯЗАТЕЛЬНО бери критерий из реального текста лога, а не из названия, когда будешь формировать ссылки и KQL-запросы.')
+
+    lines.append('КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ВЫВОДИТЬ ЛЮБОЙ ТЕКСТ, КРОМЕ JSON.')
+    
     return "\n".join(lines)
 
 
