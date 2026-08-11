@@ -55,8 +55,6 @@ async def log_analysis(request: Request):
         response_example=response_example,
     )
 
-    # result = _send_promt_to_model(prompt, client_api_key)
-
     attempts_count = 0
 
     while attempts_count < 5:
